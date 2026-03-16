@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/fast_record.dart';
 import '../services/storage_service.dart';
+import '../widgets/history_chart.dart';
 import 'edit_fast_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -45,11 +46,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: fasts.length,
-              itemBuilder: (context, index) =>
-                  _FastCard(record: fasts[index], storage: widget.storage, onEdited: () => setState(() {})),
+          : ListView(
+              children: [
+                HistoryChart(fasts: fasts),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'All Fasts',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...fasts.map((fast) => _FastCard(
+                      record: fast,
+                      storage: widget.storage,
+                      onEdited: () => setState(() {}),
+                    )),
+                const SizedBox(height: 16),
+              ],
             ),
     );
   }
@@ -87,7 +107,7 @@ class _FastCard extends StatelessWidget {
         if (edited == true) onEdited();
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: const Color(0xFF1E1E1E),

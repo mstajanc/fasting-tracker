@@ -1,11 +1,15 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+enum RingMode { fasting, eating }
+
 class FastingRing extends StatelessWidget {
   final double progress; // 0.0 to 1.0+
   final String elapsed;
   final String goal;
   final bool isActive;
+  final RingMode mode;
+  final String? remaining;
 
   const FastingRing({
     super.key,
@@ -13,9 +17,16 @@ class FastingRing extends StatelessWidget {
     required this.elapsed,
     required this.goal,
     required this.isActive,
+    this.mode = RingMode.fasting,
+    this.remaining,
   });
 
   Color get _ringColor {
+    if (mode == RingMode.eating) {
+      if (progress >= 0.85) return const Color(0xFFEF5350); // almost over
+      if (progress >= 0.6) return const Color(0xFFFFC107); // halfway
+      return const Color(0xFF42A5F5); // blue for eating
+    }
     if (progress >= 1.0) return const Color(0xFF4CAF50);
     if (progress >= 0.75) return const Color(0xFFFFC107);
     return const Color(0xFFEF5350);
@@ -49,6 +60,18 @@ class FastingRing extends StatelessWidget {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (mode == RingMode.eating && isActive) ...[
+                Text(
+                  'EATING WINDOW',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF42A5F5).withValues(alpha: 0.8),
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               Text(
                 elapsed,
                 style: const TextStyle(
@@ -59,21 +82,31 @@ class FastingRing extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                isActive ? 'of $goal goal' : 'not fasting',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white.withValues(alpha: 0.6),
-                ),
-              ),
-              if (progress >= 1.0 && isActive) ...[
-                const SizedBox(height: 8),
+              if (mode == RingMode.fasting)
                 Text(
+                  isActive ? 'of $goal goal' : 'not fasting',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              if (mode == RingMode.eating && isActive && remaining != null) ...[
+                Text(
+                  '$remaining left',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+              if (progress >= 1.0 && isActive && mode == RingMode.fasting) ...[
+                const SizedBox(height: 8),
+                const Text(
                   'GOAL REACHED',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF4CAF50),
+                    color: Color(0xFF4CAF50),
                     letterSpacing: 1.5,
                   ),
                 ),
