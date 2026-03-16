@@ -5,7 +5,7 @@ class GoalSelector extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final bool enabled;
 
-  static const goals = [16, 18, 20, 24];
+  static const goals = [12, 16, 18, 20, 24];
 
   const GoalSelector({
     super.key,

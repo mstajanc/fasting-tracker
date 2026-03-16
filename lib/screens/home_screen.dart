@@ -26,8 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _activeFast = widget.storage.activeFast;
     if (_activeFast != null) {
       _selectedGoal = _activeFast!.goalHours;
-      _startTimer();
     }
+    _startTimer();
   }
 
   @override
@@ -52,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _activeFast = record;
     });
-    _startTimer();
   }
 
   void _stopFast() {
@@ -63,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _activeFast = null;
     });
+    _startTimer();
   }
 
   void _confirmStop() {
@@ -95,11 +95,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Returns the last completed fast's eating window info, or null.
+  _EatingWindowInfo? get _eatingWindowInfo {
+    if (_activeFast != null) return null;
+    final completed = widget.storage.completedFasts;
+    if (completed.isEmpty) return null;
+    final lastFast = completed.first; // already sorted newest first
+    if (lastFast.endTime == null) return null;
+
+    final eatingWindowHours = 24 - lastFast.goalHours;
+    final eatingEnd = lastFast.endTime!.add(Duration(hours: eatingWindowHours));
+    final now = DateTime.now();
+    final remaining = eatingEnd.difference(now);
+
+    if (remaining.isNegative) return null; // eating window has passed
+
+    final totalEatingSeconds = Duration(hours: eatingWindowHours).inSeconds;
+    final elapsedEatingSeconds = now.difference(lastFast.endTime!).inSeconds;
+    final progress = (elapsedEatingSeconds / totalEatingSeconds).clamp(0.0, 1.0);
+
+    return _EatingWindowInfo(
+      elapsed: _formatDuration(now.difference(lastFast.endTime!)),
+      remaining: _formatDuration(remaining),
+      totalHours: eatingWindowHours,
+      progress: progress,
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    final hours = d.inHours.abs();
+    final minutes = d.inMinutes.remainder(60).abs();
+    final seconds = d.inSeconds.remainder(60).abs();
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isActive = _activeFast != null;
     final progress = _activeFast?.progress ?? 0.0;
     final elapsed = _activeFast?.formattedDuration ?? '00:00:00';
+    final eatingInfo = _eatingWindowInfo;
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -124,12 +161,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => HistoryScreen(storage: widget.storage),
                 ),
               );
-              // Refresh in case active fast was edited
               setState(() {
                 _activeFast = widget.storage.activeFast;
                 if (_activeFast != null) {
                   _selectedGoal = _activeFast!.goalHours;
-                  _startTimer();
                 }
               });
             },
@@ -142,12 +177,31 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              FastingRing(
-                progress: progress,
-                elapsed: elapsed,
-                goal: '${_selectedGoal}h',
-                isActive: isActive,
-              ),
+              if (isActive)
+                FastingRing(
+                  progress: progress,
+                  elapsed: elapsed,
+                  goal: '${_selectedGoal}h',
+                  isActive: true,
+                  mode: RingMode.fasting,
+                )
+              else if (eatingInfo != null)
+                FastingRing(
+                  progress: eatingInfo.progress,
+                  elapsed: eatingInfo.elapsed,
+                  goal: '${eatingInfo.totalHours}h',
+                  isActive: true,
+                  mode: RingMode.eating,
+                  remaining: eatingInfo.remaining,
+                )
+              else
+                FastingRing(
+                  progress: 0,
+                  elapsed: '00:00:00',
+                  goal: '${_selectedGoal}h',
+                  isActive: false,
+                  mode: RingMode.fasting,
+                ),
               const SizedBox(height: 48),
               GoalSelector(
                 selectedGoal: _selectedGoal,
@@ -198,4 +252,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _EatingWindowInfo {
+  final String elapsed;
+  final String remaining;
+  final int totalHours;
+  final double progress;
+
+  _EatingWindowInfo({
+    required this.elapsed,
+    required this.remaining,
+    required this.totalHours,
+    required this.progress,
+  });
 }
