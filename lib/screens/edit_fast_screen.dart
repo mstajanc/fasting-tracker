@@ -22,7 +22,7 @@ class _EditFastScreenState extends State<EditFastScreen> {
   late DateTime? _endTime;
   late int _goalHours;
 
-  static const _goals = [16, 18, 20, 24];
+  static const _goals = [12, 16, 18, 20, 24];
 
   @override
   void initState() {

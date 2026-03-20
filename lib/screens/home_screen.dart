@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/fast_record.dart';
 import '../services/storage_service.dart';
 import '../widgets/fasting_ring.dart';
@@ -95,6 +96,95 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _editStartTime() async {
+    if (_activeFast == null) return;
+    final picked = await _pickDateTime(_activeFast!.startTime);
+    if (picked == null) return;
+    if (picked.isAfter(DateTime.now())) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Start time cannot be in the future'),
+          backgroundColor: Color(0xFFEF5350),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _activeFast!.startTime = picked;
+    });
+    widget.storage.saveFast(_activeFast!);
+  }
+
+  Future<void> _editEatingStartTime() async {
+    final completed = widget.storage.completedFasts;
+    if (completed.isEmpty) return;
+    final lastFast = completed.first;
+    if (lastFast.endTime == null) return;
+
+    final picked = await _pickDateTime(lastFast.endTime!);
+    if (picked == null) return;
+    if (picked.isBefore(lastFast.startTime)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Eating start cannot be before fast start'),
+          backgroundColor: Color(0xFFEF5350),
+        ),
+      );
+      return;
+    }
+    if (picked.isAfter(DateTime.now())) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Time cannot be in the future'),
+          backgroundColor: Color(0xFFEF5350),
+        ),
+      );
+      return;
+    }
+    lastFast.endTime = picked;
+    widget.storage.saveFast(lastFast);
+    setState(() {});
+  }
+
+  Future<DateTime?> _pickDateTime(DateTime current) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(
+        data: ThemeData.dark().copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFF4CAF50),
+            surface: Color(0xFF1E1E1E),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current),
+      builder: (context, child) => Theme(
+        data: ThemeData.dark().copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFF4CAF50),
+            surface: Color(0xFF1E1E1E),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return null;
+
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
   /// Returns the last completed fast's eating window info, or null.
   _EatingWindowInfo? get _eatingWindowInfo {
     if (_activeFast != null) return null;
@@ -119,6 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
       remaining: _formatDuration(remaining),
       totalHours: eatingWindowHours,
       progress: progress,
+      startTime: lastFast.endTime!,
     );
   }
 
@@ -137,6 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final progress = _activeFast?.progress ?? 0.0;
     final elapsed = _activeFast?.formattedDuration ?? '00:00:00';
     final eatingInfo = _eatingWindowInfo;
+    final timeFmt = DateFormat('HH:mm');
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -202,19 +294,73 @@ class _HomeScreenState extends State<HomeScreen> {
                   isActive: false,
                   mode: RingMode.fasting,
                 ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 16),
+              // Editable start time chip
+              if (isActive)
+                _buildTimeChip(
+                  icon: Icons.play_arrow_rounded,
+                  label: 'Started ${timeFmt.format(_activeFast!.startTime)}',
+                  onTap: _editStartTime,
+                  color: const Color(0xFFEF5350),
+                )
+              else if (eatingInfo != null)
+                _buildTimeChip(
+                  icon: Icons.restaurant,
+                  label: 'Eating since ${timeFmt.format(eatingInfo.startTime)}',
+                  onTap: _editEatingStartTime,
+                  color: const Color(0xFF42A5F5),
+                ),
+              const SizedBox(height: 24),
               GoalSelector(
                 selectedGoal: _selectedGoal,
                 onChanged: (goal) => setState(() => _selectedGoal = goal),
-                enabled: !isActive,
+                enabled: !isActive && eatingInfo == null,
               ),
               const Spacer(flex: 2),
               Padding(
                 padding: const EdgeInsets.only(bottom: 48),
-                child: _buildActionButton(isActive),
+                child: isActive || eatingInfo == null
+                    ? _buildActionButton(isActive)
+                    : _buildEatingActions(),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color color,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color.withValues(alpha: 0.7)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.edit_outlined, size: 12, color: color.withValues(alpha: 0.5)),
+          ],
         ),
       ),
     );
@@ -252,6 +398,35 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildEatingActions() {
+    return GestureDetector(
+      onTap: _startFast,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: 200,
+        height: 56,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+          border: Border.all(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: const Text(
+          'START NEW FAST',
+          style: TextStyle(
+            color: Color(0xFF4CAF50),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EatingWindowInfo {
@@ -259,11 +434,13 @@ class _EatingWindowInfo {
   final String remaining;
   final int totalHours;
   final double progress;
+  final DateTime startTime;
 
   _EatingWindowInfo({
     required this.elapsed,
     required this.remaining,
     required this.totalHours,
     required this.progress,
+    required this.startTime,
   });
 }
